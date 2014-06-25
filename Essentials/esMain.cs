@@ -8,6 +8,7 @@ using Terraria;
 using TerrariaApi.Server;
 using TShockAPI;
 using TShockAPI.Hooks;
+using System.Timers;
 
 namespace Essentials
 {
@@ -21,9 +22,10 @@ namespace Essentials
 
 		public Dictionary<string, int[]> Disabled = new Dictionary<string, int[]>();
 		public esPlayer[] esPlayers = new esPlayer[256];
-		public DateTime LastCheck = DateTime.UtcNow;
+		//public DateTime LastCheck = DateTime.UtcNow;
 		public static esConfig Config = new esConfig();
 		public static string SavePath = string.Empty;
+		Timer UpdateTimer;
 
 		public Essentials(Main game)
 			: base(game)
@@ -40,7 +42,10 @@ namespace Essentials
 			PlayerHooks.PlayerCommand += OnPlayerCommand;
 			ServerApi.Hooks.NetGetData.Register(this, OnGetData);
 			ServerApi.Hooks.NetSendBytes.Register(this, OnSendBytes);
-			ServerApi.Hooks.GameUpdate.Register(this, OnUpdate);
+			//ServerApi.Hooks.GameUpdate.Register(this, OnUpdate);
+			UpdateTimer = new Timer(1000);
+			UpdateTimer.Elapsed += UpdateTimerTick;
+			UpdateTimer.Start();
 		}
 
 		protected override void Dispose(bool Disposing)
@@ -54,7 +59,9 @@ namespace Essentials
 				PlayerHooks.PlayerCommand -= OnPlayerCommand;
 				ServerApi.Hooks.NetGetData.Deregister(this, OnGetData);
 				ServerApi.Hooks.NetSendBytes.Deregister(this, OnSendBytes);
-				ServerApi.Hooks.GameUpdate.Deregister(this, OnUpdate);
+				//ServerApi.Hooks.GameUpdate.Deregister(this, OnUpdate);
+				UpdateTimer.Elapsed -= UpdateTimerTick;
+				UpdateTimer.Stop();
 			}
 			base.Dispose(Disposing);
 		}
@@ -338,57 +345,105 @@ namespace Essentials
 		#endregion
 
 		#region Timer
-		public void OnUpdate(EventArgs args)
+		#region OnUpdate
+		//public void OnUpdate(EventArgs args)
+		//{
+		//	if ((DateTime.UtcNow - LastCheck).TotalMilliseconds >= 1000)
+		//	{
+		//		LastCheck = DateTime.UtcNow;
+		//		foreach (var ePly in esPlayers)
+		//		{
+		//			if (ePly == null)
+		//			{
+		//				continue;
+		//			}
+
+		//			if (!ePly.SavedBackAction && ePly.TSPlayer.Dead)
+		//			{
+		//				if (ePly.TSPlayer.Group.HasPermission("essentials.back.death"))
+		//				{
+		//					ePly.LastBackX = ePly.TSPlayer.TileX;
+		//					ePly.LastBackY = ePly.TSPlayer.TileY;
+		//					ePly.LastBackAction = BackAction.Death;
+		//					ePly.SavedBackAction = true;
+		//					if (Config.ShowBackMessageOnDeath)
+		//						ePly.TSPlayer.SendSuccessMessage("Type \"/b\" to return to your position before you died.");
+		//				}
+		//			}
+		//			else if (ePly.SavedBackAction && !ePly.TSPlayer.Dead)
+		//				ePly.SavedBackAction = false;
+
+		//			if (ePly.BackCooldown > 0)
+		//				ePly.BackCooldown--;
+
+		//			if (ePly.ptTime > -1.0)
+		//			{
+		//				ePly.ptTime += 60.0;
+		//				if (!ePly.ptDay && ePly.ptTime > 32400.0)
+		//				{
+		//					ePly.ptDay = true; ePly.ptTime = 0.0;
+		//				}
+		//				else if (ePly.ptDay && ePly.ptTime > 54000.0)
+		//				{
+		//					ePly.ptDay = false; ePly.ptTime = 0.0;
+		//				}
+		//			}
+
+		//			if (ePly.Disabled && ((DateTime.UtcNow - ePly.LastDisabledCheck).TotalMilliseconds) > 3000)
+		//			{
+		//				ePly.LastDisabledCheck = DateTime.UtcNow;
+		//				ePly.Disable();
+		//				if ((ePly.TSPlayer.TileX > ePly.DisabledX + 5 || ePly.TSPlayer.TileX < ePly.DisabledX - 5) || (ePly.TSPlayer.TileY > ePly.DisabledY + 5 || ePly.TSPlayer.TileY < ePly.DisabledY - 5))
+		//				{
+		//					ePly.TSPlayer.Teleport(ePly.DisabledX * 16F, ePly.DisabledY * 16F);
+		//				}
+		//			}
+		//		}
+		//	}
+		//}
+		#endregion
+		void UpdateTimerTick(object sender, ElapsedEventArgs e)
 		{
-			if ((DateTime.UtcNow - LastCheck).TotalMilliseconds >= 1000)
+			foreach (var ePly in esPlayers.Where(_ => _ != null && _.TSPlayer != null))
 			{
-				LastCheck = DateTime.UtcNow;
-				foreach (var ePly in esPlayers)
+				if (!ePly.SavedBackAction && ePly.TSPlayer.Dead)
 				{
-					if (ePly == null)
+					if (ePly.TSPlayer.Group.HasPermission("essentials.back.death"))
 					{
-						continue;
+						ePly.LastBackX = ePly.TSPlayer.TileX;
+						ePly.LastBackY = ePly.TSPlayer.TileY;
+						ePly.LastBackAction = BackAction.Death;
+						ePly.SavedBackAction = true;
+						if (Config.ShowBackMessageOnDeath)
+							ePly.TSPlayer.SendSuccessMessage("Type \"/b\" to return to your position before you died.");
 					}
+				}
+				else if (ePly.SavedBackAction && !ePly.TSPlayer.Dead)
+					ePly.SavedBackAction = false;
 
-					if (!ePly.SavedBackAction && ePly.TSPlayer.Dead)
+				if (ePly.BackCooldown > 0)
+					ePly.BackCooldown--;
+
+				if (ePly.ptTime > -1.0)
+				{
+					ePly.ptTime += 60.0;
+					if (!ePly.ptDay && ePly.ptTime > 32400.0)
 					{
-						if (ePly.TSPlayer.Group.HasPermission("essentials.back.death"))
-						{
-							ePly.LastBackX = ePly.TSPlayer.TileX;
-							ePly.LastBackY = ePly.TSPlayer.TileY;
-							ePly.LastBackAction = BackAction.Death;
-							ePly.SavedBackAction = true;
-							if (Config.ShowBackMessageOnDeath)
-								ePly.TSPlayer.SendSuccessMessage("Type \"/b\" to return to your position before you died.");
-						}
+						ePly.ptDay = true; ePly.ptTime = 0.0;
 					}
-					else if (ePly.SavedBackAction && !ePly.TSPlayer.Dead)
-						ePly.SavedBackAction = false;
-
-					if (ePly.BackCooldown > 0)
-						ePly.BackCooldown--;
-
-					if (ePly.ptTime > -1.0)
+					else if (ePly.ptDay && ePly.ptTime > 54000.0)
 					{
-						ePly.ptTime += 60.0;
-						if (!ePly.ptDay && ePly.ptTime > 32400.0)
-						{
-							ePly.ptDay = true; ePly.ptTime = 0.0;
-						}
-						else if (ePly.ptDay && ePly.ptTime > 54000.0)
-						{
-							ePly.ptDay = false; ePly.ptTime = 0.0;
-						}
+						ePly.ptDay = false; ePly.ptTime = 0.0;
 					}
+				}
 
-					if (ePly.Disabled && ((DateTime.UtcNow - ePly.LastDisabledCheck).TotalMilliseconds) > 3000)
+				if (ePly.Disabled && ((DateTime.UtcNow - ePly.LastDisabledCheck).TotalMilliseconds) > 3000)
+				{
+					ePly.LastDisabledCheck = DateTime.UtcNow;
+					ePly.Disable();
+					if ((ePly.TSPlayer.TileX > ePly.DisabledX + 5 || ePly.TSPlayer.TileX < ePly.DisabledX - 5) || (ePly.TSPlayer.TileY > ePly.DisabledY + 5 || ePly.TSPlayer.TileY < ePly.DisabledY - 5))
 					{
-						ePly.LastDisabledCheck = DateTime.UtcNow;
-						ePly.Disable();
-						if ((ePly.TSPlayer.TileX > ePly.DisabledX + 5 || ePly.TSPlayer.TileX < ePly.DisabledX - 5) || (ePly.TSPlayer.TileY > ePly.DisabledY + 5 || ePly.TSPlayer.TileY < ePly.DisabledY - 5))
-						{
-							ePly.TSPlayer.Teleport(ePly.DisabledX * 16F, ePly.DisabledY * 16F);
-						}
+						ePly.TSPlayer.Teleport(ePly.DisabledX * 16F, ePly.DisabledY * 16F);
 					}
 				}
 			}
